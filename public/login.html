@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Sign In — VectorMatch AI</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet"/>
+  <style>
+    :root{--primary:#6c3fff;--primary-dark:#5128e0;--accent:#00d4aa;--ink:#0f0c29;--slate:#64748b;--bg:#f4f6fb;--card:#fff;--border:#e2e8f0;--glow:rgba(108,63,255,.15)}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;display:flex;flex-direction:column}
+    header{background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);padding:18px 32px;display:flex;align-items:center;gap:12px}
+    .logo-icon{width:36px;height:36px;background:linear-gradient(135deg,var(--primary),var(--accent));border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:18px}
+    .logo-text{font-size:1.1rem;font-weight:800;color:#fff}.logo-text span{color:var(--accent)}
+    main{flex:1;display:flex;align-items:center;justify-content:center;padding:40px 24px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:20px;box-shadow:0 4px 24px rgba(0,0,0,.07);padding:48px;max-width:440px;width:100%}
+    h1{font-size:1.5rem;font-weight:900;margin-bottom:8px}
+    .sub{color:var(--slate);font-size:.9rem;margin-bottom:28px}
+    .field{margin-bottom:18px}
+    .field label{display:block;font-weight:600;font-size:.82rem;text-transform:uppercase;letter-spacing:.06em;color:var(--slate);margin-bottom:7px}
+    .field input{width:100%;padding:12px 16px;border:2px solid var(--border);border-radius:10px;font-size:.95rem;font-family:inherit;background:#fafbfc;transition:border-color .2s,box-shadow .2s}
+    .field input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 4px var(--glow);background:#fff}
+    .btn{width:100%;background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;border:none;padding:14px;border-radius:50px;font-size:1rem;font-weight:700;cursor:pointer;margin-top:4px;display:flex;align-items:center;justify-content:center;gap:10px}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .error{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 16px;color:#dc2626;font-size:.88rem;margin-top:12px;display:none}
+    .success{background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px 16px;color:#16a34a;font-size:.88rem;margin-top:12px;display:none}
+    .back{text-align:center;margin-top:24px;font-size:.85rem;color:var(--slate)}
+    .back a{color:var(--primary);font-weight:700;text-decoration:none}
+  </style>
+</head>
+<body>
+<header>
+  <div class="logo-icon">🎯</div>
+  <div class="logo-text">VectorMatch<span>.AI</span></div>
+</header>
+<main>
+  <div class="card">
+    <h1>Welcome Back</h1>
+    <p class="sub">Enter your email and we'll send you a new sign-in link.</p>
+    <form id="loginForm">
+      <div class="field">
+        <label>Email Address</label>
+        <input type="email" name="email" placeholder="jane@example.com" required/>
+      </div>
+      <button class="btn" type="submit" id="submitBtn">
+        <span class="spinner" id="spinner"></span>
+        <span id="btnLabel">✉️ Send Sign-in Link</span>
+      </button>
+      <div class="error" id="error"></div>
+      <div class="success" id="success"></div>
+    </form>
+    <p class="back">New user? <a href="/">Create a free account →</a></p>
+  </div>
+</main>
+<script>
+  document.getElementById('loginForm').addEventListener('submit', async function(e){
+    e.preventDefault();
+    const email = this.email.value.trim();
+    setLoading(true);
+    document.getElementById('error').style.display = 'none';
+    document.getElementById('success').style.display = 'none';
+    try {
+      const r = await fetch('/api/resend-verification', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ email })
+      });
+      const d = await r.json();
+      if (d.error) { show('error', d.error); return; }
+      show('success', '✅ Sign-in link sent! Check your inbox.');
+    } catch(err){ show('error', 'Network error: ' + err.message); }
+    finally { setLoading(false); }
+  });
+  function setLoading(on){
+    document.getElementById('submitBtn').disabled = on;
+    document.getElementById('spinner').style.display = on ? 'block' : 'none';
+    document.getElementById('btnLabel').textContent = on ? 'Sending…' : '✉️ Send Sign-in Link';
+  }
+  function show(type, msg){
+    const el = document.getElementById(type); el.textContent = msg; el.style.display = 'block';
+  }
+</script>
+</body>
+</html>
