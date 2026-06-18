@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "vectorjobmatchai",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server.js"],
+      "port": 4200,
+      "cwd": "/Users/asifpadani/projects/vectorjobmatchai"
+    }
+  ]
+}
