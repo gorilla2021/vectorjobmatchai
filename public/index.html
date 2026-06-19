@@ -9,49 +9,58 @@
     :root{--primary:#6c3fff;--primary-dark:#5128e0;--accent:#00d4aa;--ink:#0f0c29;--slate:#64748b;--muted:#94a3b8;--bg:#f4f6fb;--card:#fff;--border:#e2e8f0;--radius:16px;--glow:rgba(108,63,255,.15)}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--ink);min-height:100vh}
-    /* header */
     header{background:linear-gradient(135deg,#0f0c29 0%,#302b63 60%,#24243e 100%);padding:18px 32px;display:flex;align-items:center;justify-content:space-between}
     .logo{display:flex;align-items:center;gap:12px}
     .logo-icon{width:40px;height:40px;background:linear-gradient(135deg,var(--primary),var(--accent));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:20px}
     .logo-text{font-size:1.2rem;font-weight:800;color:#fff}.logo-text span{color:var(--accent)}
-    /* hero */
-    .hero{text-align:center;padding:64px 24px 40px}
+    .hero{text-align:center;padding:56px 24px 36px}
     .hero-tag{display:inline-flex;align-items:center;gap:6px;background:var(--glow);color:var(--primary);font-size:.76rem;font-weight:700;padding:5px 14px;border-radius:50px;border:1px solid rgba(108,63,255,.2);margin-bottom:20px;text-transform:uppercase;letter-spacing:.05em}
     .hero h1{font-size:clamp(1.9rem,4.5vw,3rem);font-weight:900;letter-spacing:-.03em;line-height:1.15;margin-bottom:14px}
     .gradient{background:linear-gradient(90deg,var(--primary),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
     .hero p{color:var(--slate);font-size:1.05rem;max-width:580px;margin:0 auto 16px;line-height:1.7}
-    /* features */
-    .features{display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin-bottom:48px}
+    .features{display:flex;justify-content:center;flex-wrap:wrap;gap:10px;margin-bottom:44px}
     .feat{background:var(--card);border:1px solid var(--border);border-radius:50px;padding:8px 18px;font-size:.83rem;font-weight:600;color:var(--slate);display:flex;align-items:center;gap:6px}
-    /* form card */
-    .container{max-width:620px;margin:0 auto;padding:0 24px 80px}
+    .container{max-width:580px;margin:0 auto;padding:0 24px 80px}
     .card{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);box-shadow:0 4px 24px rgba(0,0,0,.07);padding:40px}
-    .card h2{font-size:1.25rem;font-weight:800;margin-bottom:6px}
+    .card h2{font-size:1.2rem;font-weight:800;margin-bottom:6px}
     .card .sub{color:var(--slate);font-size:.9rem;margin-bottom:28px}
     .field{margin-bottom:18px}
     .field label{display:block;font-weight:600;font-size:.82rem;text-transform:uppercase;letter-spacing:.06em;color:var(--slate);margin-bottom:7px}
     .field input{width:100%;padding:12px 16px;border:2px solid var(--border);border-radius:10px;font-size:.95rem;font-family:inherit;transition:border-color .2s,box-shadow .2s;background:#fafbfc}
     .field input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 4px var(--glow);background:#fff}
-    /* file upload */
-    .upload-area{border:2px dashed var(--border);border-radius:12px;padding:28px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative}
+    /* welcome back banner */
+    .welcome-back{background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1px solid #86efac;border-radius:12px;padding:18px 20px;margin-bottom:20px;display:none}
+    .welcome-back h3{font-size:1rem;font-weight:700;color:#15803d;margin-bottom:4px}
+    .welcome-back p{font-size:.87rem;color:#166534}
+    /* resume choice */
+    .resume-choice{display:none;margin-bottom:18px}
+    .resume-file-info{background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:14px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px}
+    .resume-file-info span{font-size:.88rem;font-weight:600;color:var(--primary);flex:1}
+    .choice-btns{display:flex;gap:10px}
+    .choice-btn{flex:1;padding:10px;border-radius:10px;font-size:.85rem;font-weight:600;cursor:pointer;font-family:inherit;border:2px solid var(--border);background:#fff;color:var(--slate);transition:all .15s}
+    .choice-btn.active{border-color:var(--primary);background:var(--glow);color:var(--primary)}
+    /* upload area */
+    .upload-area{border:2px dashed var(--border);border-radius:12px;padding:24px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;position:relative}
     .upload-area:hover,.upload-area.drag{border-color:var(--primary);background:var(--glow)}
     .upload-area input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer}
-    .upload-icon{font-size:2rem;margin-bottom:8px}
-    .upload-area p{color:var(--slate);font-size:.88rem}
+    .upload-icon{font-size:1.8rem;margin-bottom:8px}
+    .upload-area p{color:var(--slate);font-size:.86rem}
     .upload-area strong{color:var(--primary);font-weight:700}
-    .file-chosen{color:var(--primary);font-size:.85rem;margin-top:8px;font-weight:600;display:none}
-    /* submit */
-    .btn{width:100%;background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;border:none;padding:15px;border-radius:50px;font-size:1rem;font-weight:700;cursor:pointer;box-shadow:0 4px 18px rgba(108,63,255,.35);transition:transform .15s,box-shadow .15s;display:flex;align-items:center;justify-content:center;gap:10px;margin-top:8px}
-    .btn:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(108,63,255,.45)}
+    .file-chosen{color:var(--primary);font-size:.84rem;margin-top:8px;font-weight:600;display:none}
+    .btn{width:100%;background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;border:none;padding:15px;border-radius:50px;font-size:1rem;font-weight:700;cursor:pointer;box-shadow:0 4px 18px rgba(108,63,255,.35);transition:transform .15s,box-shadow .15s;display:flex;align-items:center;justify-content:center;gap:10px;margin-top:8px;font-family:inherit}
+    .btn:hover{transform:translateY(-1px)}
     .btn:disabled{opacity:.6;cursor:not-allowed;transform:none}
+    .btn-secondary{background:#fff;color:var(--primary);border:2px solid var(--primary);box-shadow:none}
+    .btn-secondary:hover{background:var(--glow)}
     .spinner{width:18px;height:18px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none}
+    .spinner-dark{border-color:rgba(108,63,255,.3);border-top-color:var(--primary)}
     @keyframes spin{to{transform:rotate(360deg)}}
     .error{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:12px 16px;color:#dc2626;font-size:.88rem;margin-top:12px;display:none}
-    .divider{text-align:center;color:var(--muted);font-size:.82rem;margin:20px 0;position:relative}
-    .divider::before,.divider::after{content:'';position:absolute;top:50%;width:42%;height:1px;background:var(--border)}
-    .divider::before{left:0}.divider::after{right:0}
-    .login-link{text-align:center;font-size:.88rem;color:var(--slate)}
-    .login-link a{color:var(--primary);font-weight:700;text-decoration:none}
+    .step-indicator{display:flex;align-items:center;gap:8px;margin-bottom:24px}
+    .step{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;border:2px solid var(--border);color:var(--muted)}
+    .step.active{background:var(--primary);border-color:var(--primary);color:#fff}
+    .step.done{background:#dcfce7;border-color:#16a34a;color:#16a34a}
+    .step-line{flex:1;height:2px;background:var(--border)}
     footer{text-align:center;padding:24px;color:var(--muted);font-size:.8rem;border-top:1px solid var(--border)}
     footer strong{color:var(--primary)}
     @media(max-width:600px){header{padding:16px 20px}.card{padding:28px 20px}}
@@ -69,7 +78,7 @@
 <div class="hero">
   <div class="hero-tag">🚀 Free AI Career Toolkit</div>
   <h1>Land Your Next Job<br><span class="gradient">With AI on Your Side</span></h1>
-  <p>Upload your resume once. Paste any job description. Get an instant AI-powered match report, skills gap analysis, ATS tips, resume rewrites, and a personalized 60–90 day action plan.</p>
+  <p>Upload your resume once. Paste any job description. Get an instant AI-powered match report, skills gap analysis, ATS tips, and a personalized 60–90 day action plan.</p>
   <div class="features">
     <div class="feat">✅ Match Score</div>
     <div class="feat">🔍 Missing Skills</div>
@@ -82,89 +91,240 @@
 
 <div class="container">
   <div class="card">
-    <h2>Create Your Free Account</h2>
-    <p class="sub">Takes 30 seconds. Verify your email to unlock the tool.</p>
+    <!-- Step indicators -->
+    <div class="step-indicator">
+      <div class="step active" id="step1Dot">1</div>
+      <div class="step-line"></div>
+      <div class="step" id="step2Dot">2</div>
+    </div>
 
-    <form id="regForm" enctype="multipart/form-data">
-      <div class="field">
-        <label>Full Name</label>
-        <input type="text" name="full_name" placeholder="Jane Smith" required/>
-      </div>
+    <!-- Step 1: Email -->
+    <div id="step1">
+      <h2>Get Started</h2>
+      <p class="sub">Enter your email — we'll check if you have an existing profile.</p>
       <div class="field">
         <label>Email Address</label>
-        <input type="email" name="email" placeholder="jane@example.com" required/>
+        <input type="email" id="emailInput" placeholder="you@example.com" onkeydown="if(event.key==='Enter')checkEmail()"/>
       </div>
-      <div class="field">
-        <label>Phone Number</label>
-        <input type="tel" name="phone" placeholder="+1 (555) 000-0000" required/>
-      </div>
-      <div class="field">
-        <label>Upload Resume</label>
-        <div class="upload-area" id="uploadArea">
-          <input type="file" name="resume" accept=".pdf,.doc,.docx,.txt" required id="resumeFile"/>
-          <div class="upload-icon">📄</div>
-          <p><strong>Click to upload</strong> or drag & drop</p>
-          <p>PDF, DOCX, DOC, or TXT — max 5 MB</p>
-          <div class="file-chosen" id="fileChosen"></div>
-        </div>
-      </div>
-      <button class="btn" type="submit" id="submitBtn">
-        <span class="spinner" id="spinner"></span>
-        <span id="btnLabel">🚀 Get Started — It's Free</span>
+      <button class="btn" id="checkEmailBtn" onclick="checkEmail()">
+        <span class="spinner" id="checkSpinner"></span>
+        <span id="checkLabel">Continue →</span>
       </button>
-      <div class="error" id="error"></div>
-    </form>
+      <div class="error" id="step1Error"></div>
+    </div>
 
-    <div class="divider">already have an account?</div>
-    <p class="login-link"><a href="/login.html">Sign in with your email →</a></p>
+    <!-- Step 2: Profile -->
+    <div id="step2" style="display:none">
+      <!-- Welcome back banner (returning users) -->
+      <div class="welcome-back" id="welcomeBack">
+        <h3>👋 Welcome back!</h3>
+        <p id="welcomeMsg">We found your existing profile. Your resume is ready to use.</p>
+      </div>
+
+      <h2 id="step2Title">Complete Your Profile</h2>
+      <p class="sub" id="step2Sub">Fill in your details and upload your resume to get started.</p>
+
+      <form id="profileForm">
+        <input type="hidden" id="hiddenEmail"/>
+        <input type="hidden" id="isReturning" value="false"/>
+        <input type="hidden" id="existingResumeId" value=""/>
+
+        <div class="field">
+          <label>Full Name</label>
+          <input type="text" id="nameInput" placeholder="Jane Smith" required/>
+        </div>
+        <div class="field">
+          <label>Phone Number</label>
+          <input type="tel" id="phoneInput" placeholder="+1 (555) 000-0000" required/>
+        </div>
+
+        <!-- Resume choice for returning users -->
+        <div class="resume-choice" id="resumeChoice">
+          <label style="display:block;font-weight:600;font-size:.82rem;text-transform:uppercase;letter-spacing:.06em;color:var(--slate);margin-bottom:10px">Resume on File</label>
+          <div class="resume-file-info">
+            <span>📄</span>
+            <span id="existingResumeName"></span>
+          </div>
+          <div class="choice-btns">
+            <button type="button" class="choice-btn active" id="btnUseExisting" onclick="selectResume('existing')">✅ Use Existing Resume</button>
+            <button type="button" class="choice-btn" id="btnUploadNew" onclick="selectResume('new')">📤 Upload New Resume</button>
+          </div>
+        </div>
+
+        <!-- Upload area (new users always, returning if they choose new) -->
+        <div class="field" id="uploadField">
+          <label>Upload Resume</label>
+          <div class="upload-area" id="uploadArea">
+            <input type="file" id="resumeFile" accept=".pdf,.doc,.docx,.txt"/>
+            <div class="upload-icon">📄</div>
+            <p><strong>Click to upload</strong> or drag & drop</p>
+            <p>PDF, DOCX, DOC, or TXT — max 5 MB</p>
+            <div class="file-chosen" id="fileChosen"></div>
+          </div>
+        </div>
+
+        <button class="btn" type="submit" id="submitBtn">
+          <span class="spinner" id="submitSpinner"></span>
+          <span id="submitLabel">🚀 Get Started — It's Free</span>
+        </button>
+        <div class="error" id="step2Error"></div>
+      </form>
+
+      <div style="margin-top:16px;text-align:center">
+        <button style="background:none;border:none;color:var(--muted);font-size:.82rem;cursor:pointer;font-family:inherit" onclick="resetToStep1()">← Use a different email</button>
+      </div>
+    </div>
   </div>
 </div>
 
 <footer><strong>VectorMatch AI</strong> — Works for every career, every industry.</footer>
 
 <script>
-  // File name display
-  document.getElementById('resumeFile').addEventListener('change', function(){
+  let returningUser = false;
+  let resumeChoice = 'new'; // 'existing' or 'new'
+
+  // Pre-fill error from URL
+  const urlErr = new URLSearchParams(location.search).get('error');
+  if (urlErr === 'invalid-token') showStepError('step1Error', 'Sign-in link is invalid or expired. Please try again.');
+  if (urlErr === 'expired-token') showStepError('step1Error', 'Sign-in link has expired. Please request a new one.');
+
+  async function checkEmail() {
+    const email = document.getElementById('emailInput').value.trim();
+    if (!email) { showStepError('step1Error', 'Please enter your email address.'); return; }
+    setCheckLoading(true);
+    hideError('step1Error');
+
+    try {
+      const r = await fetch('/api/check-email', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ email })
+      });
+      const d = await r.json();
+      if (d.error) { showStepError('step1Error', d.error); return; }
+      showStep2(email, d);
+    } catch(e) { showStepError('step1Error', 'Network error. Please try again.'); }
+    finally { setCheckLoading(false); }
+  }
+
+  function showStep2(email, data) {
+    document.getElementById('step1').style.display = 'none';
+    document.getElementById('step2').style.display = 'block';
+    document.getElementById('step1Dot').className = 'step done';
+    document.getElementById('step1Dot').textContent = '✓';
+    document.getElementById('step2Dot').className = 'step active';
+    document.getElementById('hiddenEmail').value = email;
+
+    if (data.status === 'returning') {
+      returningUser = true;
+      document.getElementById('isReturning').value = 'true';
+      document.getElementById('welcomeBack').style.display = 'block';
+      document.getElementById('step2Title').textContent = 'Welcome Back!';
+      document.getElementById('step2Sub').textContent = 'Confirm your details and we\'ll send you a sign-in link.';
+      document.getElementById('submitLabel').textContent = '✉️ Send My Sign-in Link';
+      document.getElementById('nameInput').value = data.full_name || '';
+      document.getElementById('phoneInput').value = data.phone || '';
+
+      if (data.resume) {
+        document.getElementById('existingResumeId').value = data.resume.id;
+        document.getElementById('existingResumeName').textContent = data.resume.name;
+        document.getElementById('resumeChoice').style.display = 'block';
+        document.getElementById('uploadField').style.display = 'none';
+        resumeChoice = 'existing';
+        document.getElementById('welcomeMsg').textContent =
+          `We found your profile and resume (${data.resume.name}). You can use it or upload a new one.`;
+      } else {
+        document.getElementById('welcomeMsg').textContent = 'We found your profile. Please upload your resume to continue.';
+      }
+    } else {
+      returningUser = false;
+      document.getElementById('step2Title').textContent = 'Create Your Free Account';
+      document.getElementById('step2Sub').textContent = 'Takes 30 seconds. Verify your email to unlock the tool.';
+    }
+  }
+
+  function selectResume(choice) {
+    resumeChoice = choice;
+    document.getElementById('btnUseExisting').className = 'choice-btn' + (choice === 'existing' ? ' active' : '');
+    document.getElementById('btnUploadNew').className = 'choice-btn' + (choice === 'new' ? ' active' : '');
+    document.getElementById('uploadField').style.display = choice === 'new' ? 'block' : 'none';
+  }
+
+  document.getElementById('resumeFile').addEventListener('change', function() {
     const fc = document.getElementById('fileChosen');
     fc.textContent = '✅ ' + (this.files[0]?.name || '');
     fc.style.display = this.files[0] ? 'block' : 'none';
   });
 
-  // Drag highlight
   const ua = document.getElementById('uploadArea');
   ua.addEventListener('dragover', e => { e.preventDefault(); ua.classList.add('drag'); });
   ua.addEventListener('dragleave', () => ua.classList.remove('drag'));
   ua.addEventListener('drop', () => ua.classList.remove('drag'));
 
-  // Pre-fill error from URL
-  const urlErr = new URLSearchParams(location.search).get('error');
-  if (urlErr === 'invalid-token') showError('Verification link is invalid or expired. Please register again.');
-
-  document.getElementById('regForm').addEventListener('submit', async function(e){
+  document.getElementById('profileForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    setLoading(true);
-    hideError();
-    const fd = new FormData(this);
+    const email = document.getElementById('hiddenEmail').value;
+    const full_name = document.getElementById('nameInput').value.trim();
+    const phone = document.getElementById('phoneInput').value.trim();
+    const fileInput = document.getElementById('resumeFile');
+    const isReturning = document.getElementById('isReturning').value === 'true';
+
+    if (!full_name || !phone) { showStepError('step2Error', 'Please fill in all fields.'); return; }
+    if (!isReturning && (!fileInput.files || !fileInput.files[0])) {
+      showStepError('step2Error', 'Please upload your resume.'); return;
+    }
+    if (isReturning && resumeChoice === 'new' && (!fileInput.files || !fileInput.files[0])) {
+      showStepError('step2Error', 'Please upload your new resume.'); return;
+    }
+
+    setSubmitLoading(true);
+    hideError('step2Error');
+
+    const fd = new FormData();
+    fd.append('email', email);
+    fd.append('full_name', full_name);
+    fd.append('phone', phone);
+    if (resumeChoice === 'new' && fileInput.files[0]) fd.append('resume', fileInput.files[0]);
+
+    const endpoint = isReturning ? '/api/send-magic-link' : '/api/register';
+
     try {
-      const r = await fetch('/api/register', { method: 'POST', body: fd });
+      const r = await fetch(endpoint, { method: 'POST', body: fd });
       const d = await r.json();
-      if (!r.ok || d.error) { showError(d.error || 'Registration failed.'); return; }
+      if (!r.ok || d.error) { showStepError('step2Error', d.error || 'Something went wrong.'); return; }
       if (d.token) {
         window.location.href = '/verify?token=' + d.token;
       } else {
-        window.location.href = '/check-email.html';
+        window.location.href = isReturning ? '/check-email.html?mode=login' : '/check-email.html';
       }
-    } catch(err){ showError('Network error: ' + err.message); }
-    finally { setLoading(false); }
+    } catch(err) { showStepError('step2Error', 'Network error: ' + err.message); }
+    finally { setSubmitLoading(false); }
   });
 
-  function setLoading(on){
-    document.getElementById('submitBtn').disabled = on;
-    document.getElementById('spinner').style.display = on ? 'block' : 'none';
-    document.getElementById('btnLabel').textContent = on ? 'Sending verification…' : '🚀 Get Started — It\'s Free';
+  function resetToStep1() {
+    document.getElementById('step1').style.display = 'block';
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step1Dot').className = 'step active';
+    document.getElementById('step1Dot').textContent = '1';
+    document.getElementById('step2Dot').className = 'step';
+    document.getElementById('welcomeBack').style.display = 'none';
+    document.getElementById('resumeChoice').style.display = 'none';
+    document.getElementById('uploadField').style.display = 'block';
   }
-  function showError(m){ const el = document.getElementById('error'); el.textContent = m; el.style.display = 'block'; }
-  function hideError(){ document.getElementById('error').style.display = 'none'; }
+
+  function setCheckLoading(on) {
+    document.getElementById('checkEmailBtn').disabled = on;
+    document.getElementById('checkSpinner').style.display = on ? 'block' : 'none';
+    document.getElementById('checkLabel').textContent = on ? 'Checking…' : 'Continue →';
+  }
+  function setSubmitLoading(on) {
+    document.getElementById('submitBtn').disabled = on;
+    document.getElementById('submitSpinner').style.display = on ? 'block' : 'none';
+    if (!on) document.getElementById('submitLabel').textContent = returningUser ? '✉️ Send My Sign-in Link' : '🚀 Get Started — It\'s Free';
+    else document.getElementById('submitLabel').textContent = returningUser ? 'Sending link…' : 'Creating account…';
+  }
+  function showStepError(id, msg) { const el = document.getElementById(id); el.textContent = msg; el.style.display = 'block'; }
+  function hideError(id) { document.getElementById(id).style.display = 'none'; }
 </script>
 </body>
 </html>

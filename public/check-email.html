@@ -28,12 +28,20 @@
 </header>
 <main>
   <div class="card">
-    <div class="email-icon">📬</div>
-    <h1>Check Your Inbox</h1>
-    <p>We've sent a verification link to your email address. Click the link to unlock your AI career toolkit.</p>
+    <div class="email-icon" id="emailIcon">📬</div>
+    <h1 id="pageTitle">Check Your Inbox</h1>
+    <p id="pageMsg">We've sent a verification link to your email address. Click the link to unlock your AI career toolkit.</p>
     <p style="font-size:.88rem">Can't find it? Check your <strong>spam or promotions</strong> folder.</p>
-    <div class="tip">✅ Once verified, you'll be taken straight to your dashboard — no password needed.</div>
-    <p style="margin-top:28px;font-size:.85rem">Wrong email? <a href="/">Go back and register again →</a></p>
+    <div class="tip" id="pageTip">✅ Once verified, you'll be taken straight to your dashboard — no password needed.</div>
+    <p style="margin-top:28px;font-size:.85rem"><a href="/">← Use a different email</a></p>
+    <script>
+      const mode = new URLSearchParams(location.search).get('mode');
+      if (mode === 'login') {
+        document.getElementById('pageTitle').textContent = 'Check Your Inbox';
+        document.getElementById('pageMsg').textContent = 'We sent a sign-in link to your email. Click it to access your dashboard and all your previous analyses.';
+        document.getElementById('pageTip').textContent = '🔐 The link expires in 24 hours. No password needed.';
+      }
+    </script>
   </div>
 </main>
 </body>

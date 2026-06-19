@@ -39,6 +39,15 @@
     .spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none}
     @keyframes spin{to{transform:rotate(360deg)}}
     .error-box{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:13px 18px;color:#dc2626;font-size:.88rem;margin-top:14px;display:none}
+    .resume-info{font-size:.82rem;color:var(--slate);margin-top:10px}
+    /* history */
+    .history-card{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);box-shadow:0 4px 24px rgba(0,0,0,.07);padding:24px 28px;margin-bottom:28px;display:none}
+    .history-card h3{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:16px}
+    .hist-item{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--border)}
+    .hist-item:last-child{border-bottom:none}
+    .hist-title{font-size:.9rem;font-weight:600;color:var(--ink);margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:400px}
+    .hist-meta{font-size:.78rem;color:var(--muted)}
+    .hist-score{padding:4px 12px;border-radius:50px;font-size:.78rem;font-weight:700;flex-shrink:0}
     /* stats strip */
     #statsStrip{display:none}
     .stats-strip{display:flex;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,.07);margin-bottom:28px}
@@ -152,6 +161,13 @@
   <div class="welcome">
     <h1 id="welcomeMsg">Welcome back!</h1>
     <p>Paste any job description below to get your full AI-powered career analysis.</p>
+    <div class="resume-info" id="resumeInfo"></div>
+  </div>
+
+  <!-- Analysis History -->
+  <div class="history-card" id="historySection">
+    <h3>📋 Previous Analyses</h3>
+    <div id="historyList"></div>
   </div>
 
   <!-- Input -->
@@ -252,7 +268,34 @@
     currentUser = u;
     document.getElementById('userName').textContent = u.full_name;
     document.getElementById('welcomeMsg').textContent = `Welcome back, ${u.full_name.split(' ')[0]}! 👋`;
+    if (u.resume) {
+      document.getElementById('resumeInfo').textContent = `📄 Active resume: ${u.resume.original_name}`;
+    }
+    loadHistory();
   });
+
+  async function loadHistory() {
+    const r = await fetch('/api/analyses');
+    if (!r.ok) return;
+    const { analyses } = await r.json();
+    if (!analyses || analyses.length === 0) return;
+    const hist = document.getElementById('historyList');
+    const section = document.getElementById('historySection');
+    hist.innerHTML = analyses.map(a => {
+      const score = a.score || 0;
+      const color = score >= 70 ? '#16a34a' : score >= 45 ? '#d97706' : '#dc2626';
+      const bg = score >= 70 ? '#dcfce7' : score >= 45 ? '#fef9c3' : '#fee2e2';
+      const date = (a.created_at || '').split('T')[0] || (a.created_at || '').split(' ')[0];
+      return `<div class="hist-item">
+        <div style="flex:1">
+          <div class="hist-title">${a.job_title || 'Analysis'}</div>
+          <div class="hist-meta">${a.resume_name || ''} · ${date}</div>
+        </div>
+        <span class="hist-score" style="background:${bg};color:${color}">${score}%</span>
+      </div>`;
+    }).join('');
+    section.style.display = 'block';
+  }
 
   async function logout(){
     await fetch('/api/logout', { method: 'POST' });

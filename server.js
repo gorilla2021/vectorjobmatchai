@@ -7,7 +7,7 @@ const fs = require('fs');
 const fetch = require('node-fetch');
 const { v4: uuidv4 } = require('uuid');
 const db = require('./db');
-const { sendVerificationEmail } = require('./mailer');
+const { sendVerificationEmail, sendMagicLinkEmail } = require('./mailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -15,22 +15,26 @@ const BASE_URL = process.env.BASE_URL || `http://localhost:${PORT}`;
 
 // Resume text extraction
 async function extractResumeText(filePath, mimetype) {
-  if (mimetype === 'application/pdf') {
-    const pdfParse = require('pdf-parse');
-    const buffer = fs.readFileSync(filePath);
-    const data = await pdfParse(buffer);
-    return data.text;
+  try {
+    if (mimetype === 'application/pdf') {
+      const pdfParse = require('pdf-parse');
+      const buffer = fs.readFileSync(filePath);
+      const data = await pdfParse(buffer);
+      return data.text;
+    }
+    if (mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+        filePath.endsWith('.docx')) {
+      const mammoth = require('mammoth');
+      const result = await mammoth.extractRawText({ path: filePath });
+      return result.value;
+    }
+    return fs.readFileSync(filePath, 'utf8');
+  } catch(e) {
+    return '';
   }
-  if (mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-    const mammoth = require('mammoth');
-    const result = await mammoth.extractRawText({ path: filePath });
-    return result.value;
-  }
-  // plain text
-  return fs.readFileSync(filePath, 'utf8');
 }
 
-// Multer — resume uploads
+// Multer
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, path.join(__dirname, 'uploads')),
   filename: (req, file, cb) => cb(null, `${uuidv4()}${path.extname(file.originalname)}`),
@@ -45,109 +49,152 @@ const upload = multer({
   },
 });
 
+app.set('trust proxy', 1);
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.set('trust proxy', 1);
 app.use(session({
   secret: process.env.SESSION_SECRET || 'vm-secret-change-me',
   resave: false,
   saveUninitialized: false,
   cookie: {
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    maxAge: 30 * 24 * 60 * 60 * 1000,
     secure: process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
   },
 }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ── Auth middleware ──────────────────────────────────────────────
 function requireAuth(req, res, next) {
   if (req.session.userId) return next();
-  res.redirect('/');
+  res.status(401).json({ error: 'Please sign in to continue.' });
 }
 
-// ── Routes ───────────────────────────────────────────────────────
+// ── Check email (step 1) ─────────────────────────────────────────
+app.post('/api/check-email', (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email required.' });
+  const user = db.prepare('SELECT id, full_name, phone, verified FROM users WHERE email = ?').get(email);
+  if (!user) return res.json({ status: 'new' });
+  const activeResume = db.prepare('SELECT id, original_name FROM resumes WHERE user_id = ? AND is_active = 1 ORDER BY created_at DESC LIMIT 1').get(user.id);
+  res.json({
+    status: 'returning',
+    full_name: user.full_name,
+    phone: user.phone,
+    verified: user.verified,
+    resume: activeResume ? { id: activeResume.id, name: activeResume.original_name } : null,
+  });
+});
 
-// Register
+// ── Register (new user) ──────────────────────────────────────────
 app.post('/api/register', upload.single('resume'), async (req, res) => {
   const { full_name, email, phone } = req.body;
   if (!full_name || !email || !phone || !req.file) {
     return res.status(400).json({ error: 'All fields and resume are required.' });
   }
-
-  let resumeText = '';
-  try {
-    resumeText = await extractResumeText(req.file.path, req.file.mimetype);
-  } catch (e) {
-    resumeText = '';
-  }
-
+  const resumeText = await extractResumeText(req.file.path, req.file.mimetype);
   const token = uuidv4();
+  const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   try {
-    const existing = db.prepare('SELECT id, verified FROM users WHERE email = ?').get(email);
-    if (existing) {
-      if (existing.verified) return res.status(400).json({ error: 'This email is already registered and verified. Please go back and use the tool.' });
-      // Resend verification
-      db.prepare('UPDATE users SET verify_token=?, full_name=?, phone=?, resume_filename=?, resume_text=? WHERE email=?')
-        .run(token, full_name, phone, req.file.filename, resumeText, email);
-    } else {
-      db.prepare('INSERT INTO users (full_name, email, phone, resume_filename, resume_text, verify_token) VALUES (?,?,?,?,?,?)')
-        .run(full_name, email, phone, req.file.filename, resumeText, token);
+    db.prepare('INSERT INTO users (full_name, email, phone, magic_token, token_expires) VALUES (?,?,?,?,?)')
+      .run(full_name, email, phone, token, expires);
+    const userId = db.prepare('SELECT id FROM users WHERE email = ?').get(email).id;
+    db.prepare('INSERT INTO resumes (user_id, filename, original_name, resume_text) VALUES (?,?,?,?)')
+      .run(userId, req.file.filename, req.file.originalname, resumeText);
+    if (process.env.SKIP_EMAIL === 'true') {
+      return res.json({ ok: true, token });
     }
-    if (process.env.SKIP_EMAIL !== 'true') {
-      await sendVerificationEmail(email, full_name, token, BASE_URL);
-    }
-    res.json({ ok: true, token: process.env.SKIP_EMAIL === 'true' ? token : undefined });
+    await sendVerificationEmail(email, full_name, token, BASE_URL);
+    res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-// Verify email
-app.get('/verify', (req, res) => {
-  const { token } = req.query;
-  const user = db.prepare('SELECT * FROM users WHERE verify_token = ?').get(token);
-  if (!user) return res.redirect('/?error=invalid-token');
-  db.prepare('UPDATE users SET verified=1, verify_token=NULL WHERE id=?').run(user.id);
-  req.session.userId = user.id;
-  res.redirect('/dashboard.html');
-});
-
-// Resend / magic login link
-app.post('/api/resend-verification', async (req, res) => {
-  const { email } = req.body;
+// ── Returning user — send magic link ────────────────────────────
+app.post('/api/send-magic-link', upload.single('resume'), async (req, res) => {
+  const { email, full_name, phone, use_existing_resume } = req.body;
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-  if (!user) return res.status(404).json({ error: 'No account found with that email. Please register first.' });
+  if (!user) return res.status(404).json({ error: 'User not found.' });
+
+  // Update profile if changed
+  db.prepare('UPDATE users SET full_name=?, phone=?, updated_at=datetime("now") WHERE id=?')
+    .run(full_name || user.full_name, phone || user.phone, user.id);
+
+  // Handle new resume upload
+  if (req.file) {
+    const resumeText = await extractResumeText(req.file.path, req.file.mimetype);
+    db.prepare('UPDATE resumes SET is_active=0 WHERE user_id=?').run(user.id);
+    db.prepare('INSERT INTO resumes (user_id, filename, original_name, resume_text) VALUES (?,?,?,?)')
+      .run(user.id, req.file.filename, req.file.originalname, resumeText);
+  }
+
   const token = uuidv4();
-  db.prepare('UPDATE users SET verify_token=? WHERE id=?').run(token, user.id);
+  const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  db.prepare('UPDATE users SET magic_token=?, token_expires=? WHERE id=?').run(token, expires, user.id);
+
+  if (process.env.SKIP_EMAIL === 'true') {
+    return res.json({ ok: true, token });
+  }
   try {
-    await sendVerificationEmail(email, user.full_name, token, BASE_URL);
+    await sendMagicLinkEmail(email, user.full_name, token, BASE_URL);
     res.json({ ok: true });
-  } catch (e) {
+  } catch(e) {
     res.status(500).json({ error: 'Failed to send email: ' + e.message });
   }
 });
 
-// Session check
-app.get('/api/me', requireAuth, (req, res) => {
-  const user = db.prepare('SELECT id, full_name, email, resume_text FROM users WHERE id=?').get(req.session.userId);
-  res.json(user);
+// ── Verify / magic link ──────────────────────────────────────────
+app.get('/verify', (req, res) => {
+  const { token } = req.query;
+  const user = db.prepare('SELECT * FROM users WHERE magic_token = ?').get(token);
+  if (!user) return res.redirect('/?error=invalid-token');
+  if (user.token_expires && new Date(user.token_expires) < new Date()) {
+    return res.redirect('/?error=expired-token');
+  }
+  db.prepare('UPDATE users SET verified=1, magic_token=NULL, token_expires=NULL WHERE id=?').run(user.id);
+  req.session.userId = user.id;
+  res.redirect('/dashboard.html');
 });
 
-// Logout
+// ── Session / me ─────────────────────────────────────────────────
+app.get('/api/me', requireAuth, (req, res) => {
+  const user = db.prepare('SELECT id, full_name, email, phone FROM users WHERE id=?').get(req.session.userId);
+  const resume = db.prepare('SELECT id, original_name, created_at FROM resumes WHERE user_id=? AND is_active=1 ORDER BY created_at DESC LIMIT 1').get(req.session.userId);
+  res.json({ ...user, resume });
+});
+
 app.post('/api/logout', (req, res) => {
   req.session.destroy(() => res.json({ ok: true }));
 });
 
-// AI Analysis
+// ── Analysis history ─────────────────────────────────────────────
+app.get('/api/analyses', requireAuth, (req, res) => {
+  const analyses = db.prepare(`
+    SELECT a.id, a.job_title, a.score, a.created_at, r.original_name as resume_name
+    FROM analyses a
+    LEFT JOIN resumes r ON a.resume_id = r.id
+    WHERE a.user_id = ?
+    ORDER BY a.created_at DESC
+    LIMIT 20
+  `).all(req.session.userId);
+  res.json({ analyses });
+});
+
+app.get('/api/analyses/:id', requireAuth, (req, res) => {
+  const analysis = db.prepare('SELECT * FROM analyses WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
+  if (!analysis) return res.status(404).json({ error: 'Not found' });
+  res.json({ ...analysis, result: JSON.parse(analysis.result_json) });
+});
+
+// ── AI Analysis ──────────────────────────────────────────────────
 app.post('/api/analyze', requireAuth, async (req, res) => {
   const { job_description } = req.body;
   if (!job_description) return res.status(400).json({ error: 'Job description required.' });
 
-  const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
-  if (!user.resume_text) return res.status(400).json({ error: 'No resume text found. Please re-register with your resume.' });
+  const resume = db.prepare('SELECT * FROM resumes WHERE user_id=? AND is_active=1 ORDER BY created_at DESC LIMIT 1').get(req.session.userId);
+  if (!resume || !resume.resume_text) return res.status(400).json({ error: 'No resume found. Please upload your resume first.' });
 
-  const resumeText = (user.resume_text || '').substring(0, 4000);
+  const resumeText = resume.resume_text.substring(0, 4000);
   const jdText = job_description.substring(0, 3000);
   const prompt = buildPrompt(resumeText, jdText);
 
@@ -177,8 +224,11 @@ app.post('/api/analyze', requireAuth, async (req, res) => {
     const raw = data.content[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
     const result = JSON.parse(raw);
 
-    db.prepare('INSERT INTO analyses (user_id, job_description, result_json) VALUES (?,?,?)')
-      .run(user.id, job_description, JSON.stringify(result));
+    // Extract job title from JD (first line or fallback)
+    const jobTitle = job_description.split('\n')[0].substring(0, 100).trim() || 'Analysis';
+
+    db.prepare('INSERT INTO analyses (user_id, resume_id, job_description, job_title, result_json, score) VALUES (?,?,?,?,?,?)')
+      .run(req.session.userId, resume.id, job_description, jobTitle, JSON.stringify(result), result.score || 0);
 
     res.json(result);
   } catch (e) {
@@ -211,33 +261,27 @@ Return ONLY valid JSON (no markdown, no code blocks):
     { "label": "<skill or requirement>", "status": "match|partial|gap", "detail": "<detail using JD wording>" }
   ],
   "missing_skills": [
-    { "skill": "<skill name>", "importance": "required|preferred", "how_to_close": "<specific action to close this gap>" }
+    { "skill": "<skill name>", "importance": "required|preferred", "how_to_close": "<specific action>" }
   ],
   "ats_risk": {
     "score": "<Low|Medium|High>",
-    "explanation": "<2-3 sentences on ATS keyword density, formatting, and scanability issues>",
-    "issues": ["<specific issue 1>", "<specific issue 2>"]
+    "explanation": "<2-3 sentences on ATS keyword density and formatting>",
+    "issues": ["<issue 1>", "<issue 2>"]
   },
   "resume_improvements": [
-    { "section": "<Resume section>", "issue": "<what's weak>", "suggestion": "<specific rewrite or fix>" }
+    { "section": "<Resume section>", "issue": "<what is weak>", "suggestion": "<specific fix>" }
   ],
   "roadmap": {
     "summary": "<2 sentences on the overall plan>",
-    "days_1_30": [
-      { "action": "<specific action>", "why": "<why this helps for this job>" }
-    ],
-    "days_31_60": [
-      { "action": "<specific action>", "why": "<why this helps>" }
-    ],
-    "days_61_90": [
-      { "action": "<specific action>", "why": "<why this helps>" }
-    ]
+    "days_1_30": [{ "action": "<action>", "why": "<why this helps>" }],
+    "days_31_60": [{ "action": "<action>", "why": "<why this helps>" }],
+    "days_61_90": [{ "action": "<action>", "why": "<why this helps>" }]
   },
   "recommendation": "<3-4 sentences recruiter-facing summary>"
 }`;
 }
 
-// ── Admin Routes ─────────────────────────────────────────────────
+// ── Admin ────────────────────────────────────────────────────────
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'vectormatch-admin-2025';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'vm-admin-token-secret';
 
@@ -254,15 +298,17 @@ app.post('/api/admin/login', (req, res) => {
 });
 
 app.get('/api/admin/users', requireAdmin, (req, res) => {
-  const users = db.prepare('SELECT id, full_name, email, phone, resume_filename, verified, created_at FROM users ORDER BY created_at DESC').all();
+  const users = db.prepare('SELECT id, full_name, email, phone, verified, created_at FROM users ORDER BY created_at DESC').all();
   res.json({ users });
 });
 
 app.get('/api/admin/analyses', requireAdmin, (req, res) => {
   const analyses = db.prepare(`
-    SELECT a.id, a.job_description, a.result_json, a.created_at,
-           u.full_name, u.email
-    FROM analyses a JOIN users u ON a.user_id = u.id
+    SELECT a.id, a.job_title, a.job_description, a.score, a.result_json, a.created_at,
+           u.full_name, u.email, r.original_name as resume_name
+    FROM analyses a
+    JOIN users u ON a.user_id = u.id
+    LEFT JOIN resumes r ON a.resume_id = r.id
     ORDER BY a.created_at DESC
   `).all();
   res.json({ analyses });
@@ -280,17 +326,14 @@ app.get('/api/admin/export/users', requireAdmin, (req, res) => {
 
 app.get('/api/admin/export/analyses', requireAdmin, (req, res) => {
   const rows = db.prepare(`
-    SELECT a.id, u.full_name, u.email, a.job_description, a.result_json, a.created_at
+    SELECT a.id, u.full_name, u.email, a.job_title, a.score, a.job_description, a.created_at
     FROM analyses a JOIN users u ON a.user_id = u.id ORDER BY a.created_at DESC
   `).all();
-  const csv = ['ID,User,Email,Score,Fit Level,Job Description (first 200 chars),Date']
+  const csv = ['ID,User,Email,Job Title,Score,Job Description (200 chars),Date']
     .concat(rows.map(r => {
-      let score = '', fit = '';
-      try { const j = JSON.parse(r.result_json); score = j.score; fit = j.fit_level || ''; } catch(e){}
-      const jd = r.job_description.replace(/"/g, '""').substring(0, 200);
-      return `${r.id},"${r.full_name}","${r.email}",${score},"${fit}","${jd}","${r.created_at}"`;
-    }))
-    .join('\n');
+      const jd = (r.job_description || '').replace(/"/g, '""').substring(0, 200);
+      return `${r.id},"${r.full_name}","${r.email}","${r.job_title || ''}",${r.score},"${jd}","${r.created_at}"`;
+    })).join('\n');
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="vectormatch-analyses.csv"');
   res.send(csv);
