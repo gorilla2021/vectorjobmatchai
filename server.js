@@ -223,4 +223,63 @@ Return ONLY valid JSON (no markdown, no code blocks):
 }`;
 }
 
+// ── Admin Routes ─────────────────────────────────────────────────
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'vectormatch-admin-2025';
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || 'vm-admin-token-secret';
+
+function requireAdmin(req, res, next) {
+  const token = req.headers['x-admin-token'] || req.query.token;
+  if (token !== ADMIN_TOKEN) return res.status(401).json({ error: 'Unauthorized' });
+  next();
+}
+
+app.post('/api/admin/login', (req, res) => {
+  const { password } = req.body;
+  if (password !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Incorrect password' });
+  res.json({ token: ADMIN_TOKEN });
+});
+
+app.get('/api/admin/users', requireAdmin, (req, res) => {
+  const users = db.prepare('SELECT id, full_name, email, phone, resume_filename, verified, created_at FROM users ORDER BY created_at DESC').all();
+  res.json({ users });
+});
+
+app.get('/api/admin/analyses', requireAdmin, (req, res) => {
+  const analyses = db.prepare(`
+    SELECT a.id, a.job_description, a.result_json, a.created_at,
+           u.full_name, u.email
+    FROM analyses a JOIN users u ON a.user_id = u.id
+    ORDER BY a.created_at DESC
+  `).all();
+  res.json({ analyses });
+});
+
+app.get('/api/admin/export/users', requireAdmin, (req, res) => {
+  const users = db.prepare('SELECT id, full_name, email, phone, verified, created_at FROM users ORDER BY created_at DESC').all();
+  const csv = ['ID,Full Name,Email,Phone,Verified,Registered']
+    .concat(users.map(u => `${u.id},"${u.full_name}","${u.email}","${u.phone}",${u.verified ? 'Yes' : 'No'},"${u.created_at}"`))
+    .join('\n');
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="vectormatch-users.csv"');
+  res.send(csv);
+});
+
+app.get('/api/admin/export/analyses', requireAdmin, (req, res) => {
+  const rows = db.prepare(`
+    SELECT a.id, u.full_name, u.email, a.job_description, a.result_json, a.created_at
+    FROM analyses a JOIN users u ON a.user_id = u.id ORDER BY a.created_at DESC
+  `).all();
+  const csv = ['ID,User,Email,Score,Fit Level,Job Description (first 200 chars),Date']
+    .concat(rows.map(r => {
+      let score = '', fit = '';
+      try { const j = JSON.parse(r.result_json); score = j.score; fit = j.fit_level || ''; } catch(e){}
+      const jd = r.job_description.replace(/"/g, '""').substring(0, 200);
+      return `${r.id},"${r.full_name}","${r.email}",${score},"${fit}","${jd}","${r.created_at}"`;
+    }))
+    .join('\n');
+  res.setHeader('Content-Type', 'text/csv');
+  res.setHeader('Content-Disposition', 'attachment; filename="vectormatch-analyses.csv"');
+  res.send(csv);
+});
+
 app.listen(PORT, () => console.log(`VectorMatch AI running at ${BASE_URL}`));
