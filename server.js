@@ -150,8 +150,12 @@ app.post('/api/analyze', requireAuth, async (req, res) => {
   const prompt = buildPrompt(user.resume_text, job_description);
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 55000);
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
+      signal: controller.signal,
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': process.env.ANTHROPIC_API_KEY,
@@ -163,6 +167,7 @@ app.post('/api/analyze', requireAuth, async (req, res) => {
         messages: [{ role: 'user', content: prompt }],
       }),
     });
+    clearTimeout(timeout);
 
     const data = await response.json();
     if (data.error) return res.status(500).json({ error: data.error.message || JSON.stringify(data.error) });
