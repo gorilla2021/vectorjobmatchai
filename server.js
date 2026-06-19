@@ -89,8 +89,10 @@ app.post('/api/register', upload.single('resume'), async (req, res) => {
       db.prepare('INSERT INTO users (full_name, email, phone, resume_filename, resume_text, verify_token) VALUES (?,?,?,?,?,?)')
         .run(full_name, email, phone, req.file.filename, resumeText, token);
     }
-    await sendVerificationEmail(email, full_name, token, BASE_URL);
-    res.json({ ok: true });
+    if (process.env.SKIP_EMAIL !== 'true') {
+      await sendVerificationEmail(email, full_name, token, BASE_URL);
+    }
+    res.json({ ok: true, token: process.env.SKIP_EMAIL === 'true' ? token : undefined });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

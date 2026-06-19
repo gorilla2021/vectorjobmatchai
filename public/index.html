@@ -149,7 +149,11 @@
       const r = await fetch('/api/register', { method: 'POST', body: fd });
       const d = await r.json();
       if (!r.ok || d.error) { showError(d.error || 'Registration failed.'); return; }
-      window.location.href = '/check-email.html';
+      if (d.token) {
+        window.location.href = '/verify?token=' + d.token;
+      } else {
+        window.location.href = '/check-email.html';
+      }
     } catch(err){ showError('Network error: ' + err.message); }
     finally { setLoading(false); }
   });
