@@ -147,7 +147,9 @@ app.post('/api/analyze', requireAuth, async (req, res) => {
   const user = db.prepare('SELECT * FROM users WHERE id=?').get(req.session.userId);
   if (!user.resume_text) return res.status(400).json({ error: 'No resume text found. Please re-register with your resume.' });
 
-  const prompt = buildPrompt(user.resume_text, job_description);
+  const resumeText = (user.resume_text || '').substring(0, 4000);
+  const jdText = job_description.substring(0, 3000);
+  const prompt = buildPrompt(resumeText, jdText);
 
   try {
     const controller = new AbortController();
