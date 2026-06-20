@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const fetch = require('node-fetch');
 const { v4: uuidv4 } = require('uuid');
-const db = require('./db');
+const { pool, initDb } = require('./db');
 const { sendVerificationEmail, sendMagicLinkEmail } = require('./mailer');
 
 const app = express();
@@ -34,9 +34,12 @@ async function extractResumeText(filePath, mimetype) {
   }
 }
 
-// Multer
+// Multer — store uploads locally (text is what matters, file is temporary)
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, 'uploads')),
+  destination: (req, file, cb) => cb(null, uploadsDir),
   filename: (req, file, cb) => cb(null, `${uuidv4()}${path.extname(file.originalname)}`),
 });
 const upload = multer({
@@ -70,19 +73,27 @@ function requireAuth(req, res, next) {
 }
 
 // ── Check email (step 1) ─────────────────────────────────────────
-app.post('/api/check-email', (req, res) => {
+app.post('/api/check-email', async (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required.' });
-  const user = db.prepare('SELECT id, full_name, phone, verified FROM users WHERE email = ?').get(email);
-  if (!user) return res.json({ status: 'new' });
-  const activeResume = db.prepare('SELECT id, original_name FROM resumes WHERE user_id = ? AND is_active = 1 ORDER BY created_at DESC LIMIT 1').get(user.id);
-  res.json({
-    status: 'returning',
-    full_name: user.full_name,
-    phone: user.phone,
-    verified: user.verified,
-    resume: activeResume ? { id: activeResume.id, name: activeResume.original_name } : null,
-  });
+  try {
+    const { rows } = await pool.query('SELECT id, full_name, phone, verified FROM users WHERE email = $1', [email]);
+    if (!rows.length) return res.json({ status: 'new' });
+    const user = rows[0];
+    const { rows: resumeRows } = await pool.query(
+      'SELECT id, original_name FROM resumes WHERE user_id = $1 AND is_active = 1 ORDER BY created_at DESC LIMIT 1',
+      [user.id]
+    );
+    res.json({
+      status: 'returning',
+      full_name: user.full_name,
+      phone: user.phone,
+      verified: user.verified,
+      resume: resumeRows.length ? { id: resumeRows[0].id, name: resumeRows[0].original_name } : null,
+    });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── Register (new user) ──────────────────────────────────────────
@@ -95,11 +106,15 @@ app.post('/api/register', upload.single('resume'), async (req, res) => {
   const token = uuidv4();
   const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   try {
-    db.prepare('INSERT INTO users (full_name, email, phone, magic_token, token_expires) VALUES (?,?,?,?,?)')
-      .run(full_name, email, phone, token, expires);
-    const userId = db.prepare('SELECT id FROM users WHERE email = ?').get(email).id;
-    db.prepare('INSERT INTO resumes (user_id, filename, original_name, resume_text) VALUES (?,?,?,?)')
-      .run(userId, req.file.filename, req.file.originalname, resumeText);
+    const { rows } = await pool.query(
+      'INSERT INTO users (full_name, email, phone, magic_token, token_expires) VALUES ($1,$2,$3,$4,$5) RETURNING id',
+      [full_name, email, phone, token, expires]
+    );
+    const userId = rows[0].id;
+    await pool.query(
+      'INSERT INTO resumes (user_id, filename, original_name, resume_text) VALUES ($1,$2,$3,$4)',
+      [userId, req.file.filename, req.file.originalname, resumeText]
+    );
     if (process.env.SKIP_EMAIL === 'true') {
       return res.json({ ok: true, token });
     }
@@ -113,54 +128,69 @@ app.post('/api/register', upload.single('resume'), async (req, res) => {
 // ── Returning user — send magic link ────────────────────────────
 app.post('/api/send-magic-link', upload.single('resume'), async (req, res) => {
   const { email, full_name, phone, use_existing_resume } = req.body;
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
-  if (!user) return res.status(404).json({ error: 'User not found.' });
-
-  // Update profile if changed
-  db.prepare('UPDATE users SET full_name=?, phone=?, updated_at=datetime("now") WHERE id=?')
-    .run(full_name || user.full_name, phone || user.phone, user.id);
-
-  // Handle new resume upload
-  if (req.file) {
-    const resumeText = await extractResumeText(req.file.path, req.file.mimetype);
-    db.prepare('UPDATE resumes SET is_active=0 WHERE user_id=?').run(user.id);
-    db.prepare('INSERT INTO resumes (user_id, filename, original_name, resume_text) VALUES (?,?,?,?)')
-      .run(user.id, req.file.filename, req.file.originalname, resumeText);
-  }
-
-  const token = uuidv4();
-  const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-  db.prepare('UPDATE users SET magic_token=?, token_expires=? WHERE id=?').run(token, expires, user.id);
-
-  if (process.env.SKIP_EMAIL === 'true') {
-    return res.json({ ok: true, token });
-  }
   try {
+    const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [email]);
+    if (!rows.length) return res.status(404).json({ error: 'User not found.' });
+    const user = rows[0];
+
+    await pool.query(
+      'UPDATE users SET full_name=$1, phone=$2, updated_at=to_char(now(),\'YYYY-MM-DD HH24:MI:SS\') WHERE id=$3',
+      [full_name || user.full_name, phone || user.phone, user.id]
+    );
+
+    if (req.file) {
+      const resumeText = await extractResumeText(req.file.path, req.file.mimetype);
+      await pool.query('UPDATE resumes SET is_active=0 WHERE user_id=$1', [user.id]);
+      await pool.query(
+        'INSERT INTO resumes (user_id, filename, original_name, resume_text) VALUES ($1,$2,$3,$4)',
+        [user.id, req.file.filename, req.file.originalname, resumeText]
+      );
+    }
+
+    const token = uuidv4();
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    await pool.query('UPDATE users SET magic_token=$1, token_expires=$2 WHERE id=$3', [token, expires, user.id]);
+
+    if (process.env.SKIP_EMAIL === 'true') {
+      return res.json({ ok: true, token });
+    }
     await sendMagicLinkEmail(email, user.full_name, token, BASE_URL);
     res.json({ ok: true });
   } catch(e) {
-    res.status(500).json({ error: 'Failed to send email: ' + e.message });
+    res.status(500).json({ error: 'Failed: ' + e.message });
   }
 });
 
 // ── Verify / magic link ──────────────────────────────────────────
-app.get('/verify', (req, res) => {
+app.get('/verify', async (req, res) => {
   const { token } = req.query;
-  const user = db.prepare('SELECT * FROM users WHERE magic_token = ?').get(token);
-  if (!user) return res.redirect('/?error=invalid-token');
-  if (user.token_expires && new Date(user.token_expires) < new Date()) {
-    return res.redirect('/?error=expired-token');
+  try {
+    const { rows } = await pool.query('SELECT * FROM users WHERE magic_token = $1', [token]);
+    if (!rows.length) return res.redirect('/?error=invalid-token');
+    const user = rows[0];
+    if (user.token_expires && new Date(user.token_expires) < new Date()) {
+      return res.redirect('/?error=expired-token');
+    }
+    await pool.query('UPDATE users SET verified=1, magic_token=NULL, token_expires=NULL WHERE id=$1', [user.id]);
+    req.session.userId = user.id;
+    res.redirect('/dashboard.html');
+  } catch(e) {
+    res.redirect('/?error=server-error');
   }
-  db.prepare('UPDATE users SET verified=1, magic_token=NULL, token_expires=NULL WHERE id=?').run(user.id);
-  req.session.userId = user.id;
-  res.redirect('/dashboard.html');
 });
 
 // ── Session / me ─────────────────────────────────────────────────
-app.get('/api/me', requireAuth, (req, res) => {
-  const user = db.prepare('SELECT id, full_name, email, phone FROM users WHERE id=?').get(req.session.userId);
-  const resume = db.prepare('SELECT id, original_name, created_at FROM resumes WHERE user_id=? AND is_active=1 ORDER BY created_at DESC LIMIT 1').get(req.session.userId);
-  res.json({ ...user, resume });
+app.get('/api/me', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, full_name, email, phone FROM users WHERE id=$1', [req.session.userId]);
+    const { rows: resumeRows } = await pool.query(
+      'SELECT id, original_name, created_at FROM resumes WHERE user_id=$1 AND is_active=1 ORDER BY created_at DESC LIMIT 1',
+      [req.session.userId]
+    );
+    res.json({ ...rows[0], resume: resumeRows[0] || null });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 app.post('/api/logout', (req, res) => {
@@ -168,22 +198,31 @@ app.post('/api/logout', (req, res) => {
 });
 
 // ── Analysis history ─────────────────────────────────────────────
-app.get('/api/analyses', requireAuth, (req, res) => {
-  const analyses = db.prepare(`
-    SELECT a.id, a.job_title, a.score, a.created_at, r.original_name as resume_name
-    FROM analyses a
-    LEFT JOIN resumes r ON a.resume_id = r.id
-    WHERE a.user_id = ?
-    ORDER BY a.created_at DESC
-    LIMIT 20
-  `).all(req.session.userId);
-  res.json({ analyses });
+app.get('/api/analyses', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT a.id, a.job_title, a.score, a.created_at, r.original_name as resume_name
+      FROM analyses a
+      LEFT JOIN resumes r ON a.resume_id = r.id
+      WHERE a.user_id = $1
+      ORDER BY a.created_at DESC
+      LIMIT 20
+    `, [req.session.userId]);
+    res.json({ analyses: rows });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
-app.get('/api/analyses/:id', requireAuth, (req, res) => {
-  const analysis = db.prepare('SELECT * FROM analyses WHERE id=? AND user_id=?').get(req.params.id, req.session.userId);
-  if (!analysis) return res.status(404).json({ error: 'Not found' });
-  res.json({ ...analysis, result: JSON.parse(analysis.result_json) });
+app.get('/api/analyses/:id', requireAuth, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT * FROM analyses WHERE id=$1 AND user_id=$2', [req.params.id, req.session.userId]);
+    if (!rows.length) return res.status(404).json({ error: 'Not found' });
+    const analysis = rows[0];
+    res.json({ ...analysis, result: JSON.parse(analysis.result_json) });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // ── AI Analysis ──────────────────────────────────────────────────
@@ -191,14 +230,19 @@ app.post('/api/analyze', requireAuth, async (req, res) => {
   const { job_description } = req.body;
   if (!job_description) return res.status(400).json({ error: 'Job description required.' });
 
-  const resume = db.prepare('SELECT * FROM resumes WHERE user_id=? AND is_active=1 ORDER BY created_at DESC LIMIT 1').get(req.session.userId);
-  if (!resume || !resume.resume_text) return res.status(400).json({ error: 'No resume found. Please upload your resume first.' });
-
-  const resumeText = resume.resume_text.substring(0, 4000);
-  const jdText = job_description.substring(0, 3000);
-  const prompt = buildPrompt(resumeText, jdText);
-
   try {
+    const { rows: resumeRows } = await pool.query(
+      'SELECT * FROM resumes WHERE user_id=$1 AND is_active=1 ORDER BY created_at DESC LIMIT 1',
+      [req.session.userId]
+    );
+    if (!resumeRows.length || !resumeRows[0].resume_text) {
+      return res.status(400).json({ error: 'No resume found. Please upload your resume first.' });
+    }
+    const resume = resumeRows[0];
+    const resumeText = resume.resume_text.substring(0, 4000);
+    const jdText = job_description.substring(0, 3000);
+    const prompt = buildPrompt(resumeText, jdText);
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 55000);
 
@@ -224,11 +268,11 @@ app.post('/api/analyze', requireAuth, async (req, res) => {
     const raw = data.content[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
     const result = JSON.parse(raw);
 
-    // Extract job title from JD (first line or fallback)
     const jobTitle = job_description.split('\n')[0].substring(0, 100).trim() || 'Analysis';
-
-    db.prepare('INSERT INTO analyses (user_id, resume_id, job_description, job_title, result_json, score) VALUES (?,?,?,?,?,?)')
-      .run(req.session.userId, resume.id, job_description, jobTitle, JSON.stringify(result), result.score || 0);
+    await pool.query(
+      'INSERT INTO analyses (user_id, resume_id, job_description, job_title, result_json, score) VALUES ($1,$2,$3,$4,$5,$6)',
+      [req.session.userId, resume.id, job_description, jobTitle, JSON.stringify(result), result.score || 0]
+    );
 
     res.json(result);
   } catch (e) {
@@ -297,46 +341,70 @@ app.post('/api/admin/login', (req, res) => {
   res.json({ token: ADMIN_TOKEN });
 });
 
-app.get('/api/admin/users', requireAdmin, (req, res) => {
-  const users = db.prepare('SELECT id, full_name, email, phone, verified, created_at FROM users ORDER BY created_at DESC').all();
-  res.json({ users });
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, full_name, email, phone, verified, created_at FROM users ORDER BY created_at DESC');
+    res.json({ users: rows });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
-app.get('/api/admin/analyses', requireAdmin, (req, res) => {
-  const analyses = db.prepare(`
-    SELECT a.id, a.job_title, a.job_description, a.score, a.result_json, a.created_at,
-           u.full_name, u.email, r.original_name as resume_name
-    FROM analyses a
-    JOIN users u ON a.user_id = u.id
-    LEFT JOIN resumes r ON a.resume_id = r.id
-    ORDER BY a.created_at DESC
-  `).all();
-  res.json({ analyses });
+app.get('/api/admin/analyses', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT a.id, a.job_title, a.job_description, a.score, a.result_json, a.created_at,
+             u.full_name, u.email, r.original_name as resume_name
+      FROM analyses a
+      JOIN users u ON a.user_id = u.id
+      LEFT JOIN resumes r ON a.resume_id = r.id
+      ORDER BY a.created_at DESC
+    `);
+    res.json({ analyses: rows });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
-app.get('/api/admin/export/users', requireAdmin, (req, res) => {
-  const users = db.prepare('SELECT id, full_name, email, phone, verified, created_at FROM users ORDER BY created_at DESC').all();
-  const csv = ['ID,Full Name,Email,Phone,Verified,Registered']
-    .concat(users.map(u => `${u.id},"${u.full_name}","${u.email}","${u.phone}",${u.verified ? 'Yes' : 'No'},"${u.created_at}"`))
-    .join('\n');
-  res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', 'attachment; filename="vectormatch-users.csv"');
-  res.send(csv);
+app.get('/api/admin/export/users', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT id, full_name, email, phone, verified, created_at FROM users ORDER BY created_at DESC');
+    const csv = ['ID,Full Name,Email,Phone,Verified,Registered']
+      .concat(rows.map(u => `${u.id},"${u.full_name}","${u.email}","${u.phone}",${u.verified ? 'Yes' : 'No'},"${u.created_at}"`))
+      .join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="vectormatch-users.csv"');
+    res.send(csv);
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
-app.get('/api/admin/export/analyses', requireAdmin, (req, res) => {
-  const rows = db.prepare(`
-    SELECT a.id, u.full_name, u.email, a.job_title, a.score, a.job_description, a.created_at
-    FROM analyses a JOIN users u ON a.user_id = u.id ORDER BY a.created_at DESC
-  `).all();
-  const csv = ['ID,User,Email,Job Title,Score,Job Description (200 chars),Date']
-    .concat(rows.map(r => {
-      const jd = (r.job_description || '').replace(/"/g, '""').substring(0, 200);
-      return `${r.id},"${r.full_name}","${r.email}","${r.job_title || ''}",${r.score},"${jd}","${r.created_at}"`;
-    })).join('\n');
-  res.setHeader('Content-Type', 'text/csv');
-  res.setHeader('Content-Disposition', 'attachment; filename="vectormatch-analyses.csv"');
-  res.send(csv);
+app.get('/api/admin/export/analyses', requireAdmin, async (req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT a.id, u.full_name, u.email, a.job_title, a.score, a.job_description, a.created_at
+      FROM analyses a JOIN users u ON a.user_id = u.id ORDER BY a.created_at DESC
+    `);
+    const csv = ['ID,User,Email,Job Title,Score,Job Description (200 chars),Date']
+      .concat(rows.map(r => {
+        const jd = (r.job_description || '').replace(/"/g, '""').substring(0, 200);
+        return `${r.id},"${r.full_name}","${r.email}","${r.job_title || ''}",${r.score},"${jd}","${r.created_at}"`;
+      })).join('\n');
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="vectormatch-analyses.csv"');
+    res.send(csv);
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
-app.listen(PORT, () => console.log(`VectorMatch AI running at ${BASE_URL}`));
+// ── Start ────────────────────────────────────────────────────────
+initDb()
+  .then(() => {
+    app.listen(PORT, () => console.log(`VectorMatch AI running at ${BASE_URL}`));
+  })
+  .catch(err => {
+    console.error('Database init failed:', err.message);
+    process.exit(1);
+  });
