@@ -269,7 +269,11 @@
     const fileInput = document.getElementById('resumeFile');
     const isReturning = document.getElementById('isReturning').value === 'true';
 
-    if (!full_name || !phone) { showStepError('step2Error', 'Please fill in all fields.'); return; }
+    if (!full_name) { showStepError('step2Error', 'Full name is required.'); return; }
+    if (full_name.length > 100) { showStepError('step2Error', 'Name must be under 100 characters.'); return; }
+    if (!phone) { showStepError('step2Error', 'Phone number is required.'); return; }
+    const digitsOnly = phone.replace(/\D/g, '');
+    if (digitsOnly.length < 10) { showStepError('step2Error', 'Please enter a valid phone number (at least 10 digits).'); return; }
     if (!isReturning && (!fileInput.files || !fileInput.files[0])) {
       showStepError('step2Error', 'Please upload your resume.'); return;
     }

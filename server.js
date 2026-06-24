@@ -70,6 +70,7 @@ const adminLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { e
 const authLimiter  = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, message: { error: 'Too many requests. Try again in an hour.' } });
 app.use(express.static(path.join(__dirname, 'public')));
 
+
 function requireAuth(req, res, next) {
   if (req.session.userId) return next();
   res.status(401).json({ error: 'Please sign in to continue.' });
@@ -344,6 +345,14 @@ app.get('/api/admin/export/analyses', requireAdmin, (req, res) => {
   res.setHeader('Content-Type', 'text/csv');
   res.setHeader('Content-Disposition', 'attachment; filename="vectormatch-analyses.csv"');
   res.send(csv);
+});
+
+// Global error handler — must be last
+app.use((err, req, res, next) => {
+  if (err.code === 'LIMIT_FILE_SIZE') return res.status(400).json({ error: 'File exceeds maximum size limit of 5MB.' });
+  if (err.message && err.message.includes('Only PDF')) return res.status(400).json({ error: 'Unsupported file type. Please upload PDF, DOC, DOCX, or TXT.' });
+  if (err.status === 413) return res.status(413).json({ error: 'Request too large.' });
+  res.status(500).json({ error: 'An unexpected error occurred.' });
 });
 
 app.listen(PORT, () => console.log(`VectorMatch AI running at ${BASE_URL}`));
