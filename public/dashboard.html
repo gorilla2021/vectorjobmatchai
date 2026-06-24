@@ -39,6 +39,18 @@
     .spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;display:none}
     @keyframes spin{to{transform:rotate(360deg)}}
     .error-box{background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:13px 18px;color:#dc2626;font-size:.88rem;margin-top:14px;display:none}
+    /* Progress bar */
+    .progress-wrap{display:none;margin-top:20px;background:#f8fafc;border:1px solid var(--border);border-radius:12px;padding:20px 24px}
+    .progress-track{height:8px;background:var(--border);border-radius:99px;overflow:hidden;margin-bottom:14px}
+    .progress-fill{height:100%;width:0%;background:linear-gradient(90deg,var(--primary),var(--accent));border-radius:99px;transition:width .5s ease}
+    .progress-steps{display:flex;flex-direction:column;gap:8px}
+    .progress-step{display:flex;align-items:center;gap:10px;font-size:.85rem;color:var(--muted);transition:color .3s}
+    .progress-step.active{color:var(--primary);font-weight:600}
+    .progress-step.done{color:#16a34a;font-weight:600}
+    .step-icon{width:20px;height:20px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:.65rem;flex-shrink:0;transition:all .3s}
+    .progress-step.active .step-icon{border-color:var(--primary);background:var(--glow);color:var(--primary)}
+    .progress-step.done .step-icon{border-color:#16a34a;background:#dcfce7;color:#16a34a}
+    .progress-eta{font-size:.78rem;color:var(--muted);margin-top:10px;text-align:right}
     .resume-info{font-size:.82rem;color:var(--slate);margin-top:10px}
     /* history */
     .history-card{background:var(--card);border-radius:var(--radius);border:1px solid var(--border);box-shadow:0 4px 24px rgba(0,0,0,.07);padding:24px 28px;margin-bottom:28px;display:none}
@@ -182,6 +194,19 @@
       <button class="btn-clear" onclick="clearAll()">Clear</button>
     </div>
     <div class="error-box" id="errorBox"></div>
+
+    <!-- Progress bar -->
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+      <div class="progress-steps">
+        <div class="progress-step" id="step1"><div class="step-icon">1</div><span>Reading your resume & job description…</span></div>
+        <div class="progress-step" id="step2"><div class="step-icon">2</div><span>Matching skills and experience…</span></div>
+        <div class="progress-step" id="step3"><div class="step-icon">3</div><span>Running ATS compatibility check…</span></div>
+        <div class="progress-step" id="step4"><div class="step-icon">4</div><span>Building your 60–90 day roadmap…</span></div>
+        <div class="progress-step" id="step5"><div class="step-icon">5</div><span>Finalizing analysis report…</span></div>
+      </div>
+      <div class="progress-eta" id="progressEta">This usually takes 15–30 seconds</div>
+    </div>
   </div>
 
   <!-- Stats strip -->
@@ -425,10 +450,62 @@
     document.getElementById('statsStrip').style.display='none';
     hideError();
   }
+  let progressTimer = null;
   function setLoading(on){
     document.getElementById('analyzeBtn').disabled = on;
     document.getElementById('spinner').style.display = on ? 'block' : 'none';
     document.getElementById('btnLabel').textContent = on ? 'Analyzing…' : '⚡ Analyze My Fit';
+    if (on) startProgress(); else stopProgress();
+  }
+
+  function startProgress(){
+    const wrap = document.getElementById('progressWrap');
+    wrap.style.display = 'block';
+    // Reset all steps
+    for(let i=1;i<=5;i++){
+      const s = document.getElementById('step'+i);
+      s.className = 'progress-step';
+      s.querySelector('.step-icon').textContent = i;
+    }
+    document.getElementById('progressFill').style.width = '0%';
+    document.getElementById('progressEta').textContent = 'This usually takes 15–30 seconds';
+
+    // Step timings (ms): step activates at these offsets
+    const schedule = [
+      { step:1, at:300,  pct:10 },
+      { step:2, at:4000, pct:30 },
+      { step:3, at:10000,pct:50 },
+      { step:4, at:18000,pct:70 },
+      { step:5, at:26000,pct:88 },
+    ];
+    let prev = 0;
+    const timers = [];
+    schedule.forEach(({step, at, pct}) => {
+      timers.push(setTimeout(() => {
+        if(prev > 0) {
+          const ps = document.getElementById('step'+prev);
+          ps.className = 'progress-step done';
+          ps.querySelector('.step-icon').textContent = '✓';
+        }
+        document.getElementById('step'+step).className = 'progress-step active';
+        document.getElementById('progressFill').style.width = pct + '%';
+        prev = step;
+        if(step === 5) document.getElementById('progressEta').textContent = 'Almost done…';
+      }, at));
+    });
+    progressTimer = timers;
+  }
+
+  function stopProgress(){
+    if(progressTimer) progressTimer.forEach(t => clearTimeout(t));
+    progressTimer = null;
+    // Complete all steps
+    document.getElementById('progressFill').style.width = '100%';
+    setTimeout(() => {
+      document.getElementById('progressWrap').style.display = 'none';
+      // Reset
+      document.getElementById('progressFill').style.width = '0%';
+    }, 600);
   }
   function showError(m){ const el=document.getElementById('errorBox'); el.textContent=m; el.style.display='block'; }
   function hideError(){ document.getElementById('errorBox').style.display='none'; }
