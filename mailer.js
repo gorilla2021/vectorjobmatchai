@@ -4,6 +4,8 @@ const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || 'mail.vectorbrainai.com',
   port: parseInt(process.env.SMTP_PORT || '465'),
   secure: true,
+  connectionTimeout: 10000,
+  socketTimeout: 10000,
   auth: {
     user: process.env.GMAIL_USER,
     pass: process.env.GMAIL_APP_PASSWORD,
