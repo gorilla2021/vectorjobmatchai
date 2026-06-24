@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const session = require('express-session');
+const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -58,10 +59,15 @@ app.use(session({
   saveUninitialized: false,
   cookie: {
     maxAge: 30 * 24 * 60 * 60 * 1000,
+    httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
   },
 }));
+
+// Rate limiting
+const adminLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: 'Too many attempts. Try again in 15 minutes.' } });
+const authLimiter  = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, message: { error: 'Too many requests. Try again in an hour.' } });
 app.use(express.static(path.join(__dirname, 'public')));
 
 function requireAuth(req, res, next) {
@@ -70,7 +76,7 @@ function requireAuth(req, res, next) {
 }
 
 // ── Check email (step 1) ─────────────────────────────────────────
-app.post('/api/check-email', (req, res) => {
+app.post('/api/check-email', authLimiter, (req, res) => {
   const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email required.' });
   const user = db.prepare('SELECT id, full_name, phone, verified FROM users WHERE email = ?').get(email);
@@ -86,7 +92,7 @@ app.post('/api/check-email', (req, res) => {
 });
 
 // ── Register (new user) ──────────────────────────────────────────
-app.post('/api/register', upload.single('resume'), async (req, res) => {
+app.post('/api/register', authLimiter, upload.single('resume'), async (req, res) => {
   const { full_name, email, phone } = req.body;
   if (!full_name || !email || !phone || !req.file) {
     return res.status(400).json({ error: 'All fields and resume are required.' });
@@ -111,7 +117,7 @@ app.post('/api/register', upload.single('resume'), async (req, res) => {
 });
 
 // ── Returning user — send magic link ────────────────────────────
-app.post('/api/send-magic-link', upload.single('resume'), async (req, res) => {
+app.post('/api/send-magic-link', authLimiter, upload.single('resume'), async (req, res) => {
   const { email, full_name, phone, use_existing_resume } = req.body;
   const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
   if (!user) return res.status(404).json({ error: 'User not found.' });
@@ -220,7 +226,9 @@ app.post('/api/analyze', requireAuth, async (req, res) => {
     if (data.error) return res.status(500).json({ error: data.error.message || JSON.stringify(data.error) });
 
     const raw = data.content[0].text.replace(/```json/g, '').replace(/```/g, '').trim();
-    const result = JSON.parse(raw);
+    let result;
+    try { result = JSON.parse(raw); }
+    catch(e) { return res.status(500).json({ error: 'AI returned an unexpected response. Please try again.' }); }
 
     const jobTitle = job_description.split('\n')[0].substring(0, 100).trim() || 'Analysis';
     db.prepare('INSERT INTO analyses (user_id, resume_id, job_description, job_title, result_json, score) VALUES (?,?,?,?,?,?)')
@@ -287,7 +295,7 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-app.post('/api/admin/login', (req, res) => {
+app.post('/api/admin/login', adminLimiter, (req, res) => {
   const { password } = req.body;
   if (password !== ADMIN_PASSWORD) return res.status(401).json({ error: 'Incorrect password' });
   res.json({ token: ADMIN_TOKEN });

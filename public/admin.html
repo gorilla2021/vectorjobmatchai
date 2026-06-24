@@ -226,11 +226,14 @@
     document.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', (i===0&&tab==='users')||(i===1&&tab==='analyses')));
   }
 
-  function exportCSV(type) {
+  async function exportCSV(type) {
+    const r = await fetch(`/api/admin/export/${type}`, { headers: { 'x-admin-token': adminToken } });
+    const blob = await r.blob();
     const a = document.createElement('a');
-    a.href = `/api/admin/export/${type}?token=${adminToken}`;
+    a.href = URL.createObjectURL(blob);
     a.download = `vectormatch-${type}.csv`;
     a.click();
+    URL.revokeObjectURL(a.href);
   }
 </script>
 </body>
