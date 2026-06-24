@@ -112,6 +112,9 @@ app.post('/api/register', authLimiter, upload.single('resume'), async (req, res)
     await sendVerificationEmail(email, full_name, token, BASE_URL);
     res.json({ ok: true });
   } catch (e) {
+    if (e.message && e.message.includes('UNIQUE constraint failed')) {
+      return res.status(400).json({ error: 'This email is already registered. Please use the sign-in option instead.' });
+    }
     res.status(500).json({ error: e.message });
   }
 });
